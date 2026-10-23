@@ -1,0 +1,17 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Maven
+target/
+
+# Java
+*.class
+*.log
+
+# Pliki systemowe
+.DS_Store
+Thumbs.db
+
+# Lokalnie zapisane dane aplikacji
+data/
