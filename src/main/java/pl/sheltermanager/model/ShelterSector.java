@@ -52,26 +52,31 @@ public class ShelterSector {
             );
         }
 
+        if (animal.getId() == null || animal.getId().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Zwierzę musi mieć przypisane ID."
+            );
+        }
+
+        for (Animal existing : animals) {
+            if (existing.getId().equals(animal.getId())) {
+                throw new IllegalArgumentException(
+                        "Zwierzę o takim ID już istnieje w sektorze."
+                );
+            }
+        }
+
         if (animals.size() >= maxCapacity) {
             throw new IllegalStateException(
                     "Brak wolnych miejsc w sektorze."
             );
         }
 
-        for (Animal existingAnimal : animals) {
-            if (existingAnimal.getId().equals(animal.getId())) {
-                throw new IllegalArgumentException(
-                        "Zwierzę o takim ID już istnieje."
-                );
-            }
-        }
-
         animals.add(animal);
 
-        System.out.println(
-                "Dodano zwierzę: " + animal.getName()
-        );
+        System.out.println("Dodano zwierzę: " + animal.getName());
     }
+
 
     //usuwanie zwierzecia
     public void removeAnimal(Animal animal) {

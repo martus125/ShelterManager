@@ -11,25 +11,21 @@ public class Animal implements Comparable<Animal> {
     private double weight;
 
 //konstruktor
-    public Animal(String id, String name, String species,
+    public Animal(String name, String species,
                   String breed, AnimalCondition condition,
                   int age, double weight) {
 
-        this.id = id;
-        this.name = name;
-        this.species = species;
-        this.breed = breed;
-        this.condition = condition;
-        this.age = age;
-        this.weight = weight;
+        setName(name);
+        setSpecies(species);
+        setBreed(breed);
+        setCondition(condition);
+        setAge(age);
+        setWeight(weight);
     }
+
 // gettery i settery
     public String getId() {
         return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
     }
 
     public String getName() {
@@ -37,7 +33,12 @@ public class Animal implements Comparable<Animal> {
     }
 
     public void setName(String name) {
-        this.name = name;
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Imię zwierzęcia nie może być puste."
+            );
+        }
+        this.name = name.trim();
     }
 
     public String getSpecies() {
@@ -45,7 +46,12 @@ public class Animal implements Comparable<Animal> {
     }
 
     public void setSpecies(String species) {
-        this.species = species;
+        if (species == null || species.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Gatunek nie może być pusty."
+            );
+        }
+        this.species = species.trim();
     }
 
     public String getBreed() {
@@ -53,7 +59,12 @@ public class Animal implements Comparable<Animal> {
     }
 
     public void setBreed(String breed) {
-        this.breed = breed;
+        if (breed == null || breed.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Rasa nie może być pusta."
+            );
+        }
+        this.breed = breed.trim();
     }
 
     public AnimalCondition getCondition() {
@@ -61,6 +72,11 @@ public class Animal implements Comparable<Animal> {
     }
 
     public void setCondition(AnimalCondition condition) {
+        if (condition == null) {
+            throw new IllegalArgumentException(
+                    "Stan zdrowia musi być określony."
+            );
+        }
         this.condition = condition;
     }
 
@@ -69,6 +85,11 @@ public class Animal implements Comparable<Animal> {
     }
 
     public void setAge(int age) {
+        if (age < 0) {
+            throw new IllegalArgumentException(
+                    "Wiek nie może być ujemny."
+            );
+        }
         this.age = age;
     }
 
@@ -77,6 +98,11 @@ public class Animal implements Comparable<Animal> {
     }
 
     public void setWeight(double weight) {
+        if (!Double.isFinite(weight) || weight <= 0) {
+            throw new IllegalArgumentException(
+                    "Waga musi być dodatnią, skończoną liczbą."
+            );
+        }
         this.weight = weight;
     }
 //wszystkie informacje o zwierzeciu
@@ -109,5 +135,23 @@ public class Animal implements Comparable<Animal> {
 
         return Integer.compare(this.age, other.age);
     }
+//przypisaywanie id
+    public void assignId(String id) {
+
+        if (this.id != null) {
+            throw new IllegalStateException(
+                    "Zwierzę ma już przypisane ID."
+            );
+        }
+
+        if (id == null || !id.matches("A\\d{3,}")) {
+            throw new IllegalArgumentException(
+                    "Niepoprawny format ID zwierzęcia."
+            );
+        }
+
+        this.id = id;
+    }
+
 
 }

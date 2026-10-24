@@ -5,14 +5,17 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import pl.sheltermanager.model.Animal;
 
 public class ShelterManager {
 
     private Map<String, ShelterSector> sectors;
-
+    private int nextAnimalId = 1;
+//konstruktor
     public ShelterManager() {
         sectors = new HashMap<>();
     }
+
 //dodawanie sektorow
     public void addSector(String name, int maxCapacity) {
 
@@ -92,5 +95,101 @@ public class ShelterManager {
             );
         }
     }
+//wyszukiwanie konkretnych sektorow
+    public ShelterSector getSector(String name) {
+
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Nazwa sektora nie może być pusta."
+            );
+        }
+
+        ShelterSector sector = sectors.get(name.trim());
+
+        if (sector == null) {
+            throw new IllegalArgumentException(
+                    "Nie znaleziono sektora: " + name
+            );
+        }
+
+        return sector;
+    }
+//unikalne id dla kazdego zwierzecia
+    public Animal findAnimalById(String id) {
+
+        if (id == null || id.isBlank()) {
+            throw new IllegalArgumentException(
+                    "ID zwierzęcia nie może być puste."
+            );
+        }
+
+        for (ShelterSector sector : sectors.values()) {
+
+            for (Animal animal : sector.getAnimals()) {
+
+                if (animal.getId().equals(id)) {
+                    return animal;
+                }
+            }
+        }
+
+        return null;
+    }
+//dodawanie zwierzat do sektora
+    public void addAnimalToSector(String sectorName, Animal animal) {
+
+        if (animal == null) {
+            throw new IllegalArgumentException(
+                    "Nie można dodać pustego zwierzęcia."
+            );
+        }
+
+        ShelterSector sector = getSector(sectorName);
+
+        if (animal.getId() != null) {
+            throw new IllegalArgumentException(
+                    "Zwierzę ma już przypisane ID."
+            );
+        }
+
+        if (sector.getAnimals().size() >= sector.getMaxCapacity()) {
+            throw new IllegalStateException(
+                    "Brak wolnych miejsc w sektorze."
+            );
+        }
+
+        String newId = String.format("A%03d", nextAnimalId);
+//przed przydzieleniem ID sprawdzamy, czy taki identyfikator już istnieje - licznik zwiększamy po udanym dodaniu zwierzęcia
+        while (findAnimalById(newId) != null) {
+            nextAnimalId++;
+            newId = String.format("A%03d", nextAnimalId);
+        }
+
+        animal.assignId(newId);
+        sector.addAnimal(animal);
+
+        nextAnimalId++;
+    }
+//przenoszenie zwierzat miedzy sektorami
+    public void moveAnimalBetweenSectors(
+            String animalId,
+            String sourceSectorName,
+            String targetSectorName
+    ) {
+
+        ShelterSector source = getSector(sourceSectorName);
+        ShelterSector target = getSector(targetSectorName);
+
+        Animal animal = source.getAnimals().stream()
+                .filter(a -> a.getId().equals(animalId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Nie znaleziono zwierzęcia w sektorze źródłowym."
+                ));
+
+        source.moveAnimal(animal, target);
+    }
+
+
 
 }
