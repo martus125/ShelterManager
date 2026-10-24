@@ -25,4 +25,4 @@ The application allows users to manage animals and shelter sectors, track animal
 - `ShelterManager` – manages the entire shelter
 
 ## Author
-Marta Jędrys
+Marta Jędrys 
