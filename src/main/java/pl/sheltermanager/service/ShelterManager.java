@@ -111,7 +111,6 @@ public class ShelterManager {
                     "Nie znaleziono sektora: " + name
             );
         }
-
         return sector;
     }
 //unikalne id dla kazdego zwierzecia
@@ -132,7 +131,6 @@ public class ShelterManager {
                 }
             }
         }
-
         return null;
     }
 //dodawanie zwierzat do sektora
@@ -188,6 +186,91 @@ public class ShelterManager {
                 ));
 
         source.moveAnimal(animal, target);
+    }
+
+    public List<ShelterSector> getAllSectors() {
+        return new ArrayList<>(sectors.values());
+    }
+
+    public void updateSector(
+            String oldName,
+            String newName,
+            int newCapacity) {
+
+        ShelterSector sector = sectors.get(oldName);
+
+        if (sector == null) {
+            throw new IllegalArgumentException(
+                    "Nie znaleziono sektora: " + oldName
+            );
+        }
+
+        if (newName == null || newName.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Nazwa sektora nie może być pusta."
+            );
+        }
+
+        String normalizedName = newName.trim();
+
+        if (!oldName.equals(normalizedName)
+                && sectors.containsKey(normalizedName)) {
+            throw new IllegalArgumentException(
+                    "Sektor o tej nazwie już istnieje."
+            );
+        }
+
+        // Walidacja i aktualizacja danych sektora
+        sector.updateSector(normalizedName, newCapacity);
+
+        // Aktualizacja klucza mapy, jeśli nazwa się zmieniła
+        if (!oldName.equals(normalizedName)) {
+            sectors.remove(oldName);
+            sectors.put(normalizedName, sector);
+        }
+    }
+
+    public void restoreAnimalToSector(
+            String sectorName,
+            Animal animal,
+            String savedId) {
+
+        ShelterSector sector = getSector(sectorName);
+
+        if (sector == null) {
+            throw new IllegalArgumentException(
+                    "Nie znaleziono sektora: " + sectorName
+            );
+        }
+
+        if (savedId == null || !savedId.matches("A\\d{3,}")) {
+            throw new IllegalArgumentException(
+                    "Nieprawidłowy identyfikator zwierzęcia."
+            );
+        }
+
+        if (animal.getId() != null) {
+            throw new IllegalArgumentException(
+                    "Zwierzę ma już przypisany identyfikator."
+            );
+        }
+
+        if (findAnimalById(savedId) != null) {
+            throw new IllegalArgumentException(
+                    "Zwierzę o tym ID już istnieje: " + savedId
+            );
+        }
+
+        // Przywracamy zapisany identyfikator
+        animal.assignId(savedId);
+
+        // Dodajemy zwierzę do sektora
+        sector.addAnimal(animal);
+
+        // Aktualizujemy licznik kolejnych ID
+        int idNumber = Integer.parseInt(savedId.substring(1));
+
+        nextAnimalId = Math.max(nextAnimalId, idNumber + 1);
     }
 
 

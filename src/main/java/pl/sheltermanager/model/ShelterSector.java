@@ -48,7 +48,7 @@ public class ShelterSector {
 
         if (animal == null) {
             throw new IllegalArgumentException(
-                    "Nie można dodać pustego zwierzęcia."
+                    "Nie może być pustego pola!"
             );
         }
 
@@ -71,19 +71,17 @@ public class ShelterSector {
                     "Brak wolnych miejsc w sektorze."
             );
         }
-
         animals.add(animal);
 
         System.out.println("Dodano zwierzę: " + animal.getName());
     }
-
 
     //usuwanie zwierzecia
     public void removeAnimal(Animal animal) {
 
         if (animal == null) {
             throw new IllegalArgumentException(
-                    "Nie wybrano zwierzęcia do usunięcia."
+                    "Nie wybrano zwierzęcia do usunięcia!"
             );
         }
 
@@ -135,7 +133,7 @@ public class ShelterSector {
                 "Przeniesiono zwierzę do sektora: "
                         + targetSector.getSectorName()
         );
-
+//zmienić żeby nie usuwałozwierzęcia tylko przenoiło żeby nie wprowadzac danych do systemu od nowa w sektorze
     }
 
     //zmiana stanu zdrowia
@@ -315,6 +313,30 @@ public class ShelterSector {
                 animals,
                 Comparator.comparingDouble(Animal::getWeight)
         );
+    }
+//metoda sprawdza poprawność wszystkich nowych danych, zanim zmieni istniejące wartości
+    public void updateSector(String newName, int newCapacity) {
+
+        if (newName == null || newName.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Nazwa sektora nie może być pusta."
+            );
+        }
+
+        if (newCapacity <= 0) {
+            throw new IllegalArgumentException(
+                    "Pojemność sektora musi być większa od zera."
+            );
+        }
+
+        if (newCapacity < animals.size()) {
+            throw new IllegalArgumentException(
+                    "Nie można zmniejszyć pojemności poniżej liczby zwierząt."
+            );
+        }
+
+        this.sectorName = newName.trim();
+        this.maxCapacity = newCapacity;
     }
 
 }

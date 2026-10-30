@@ -12,9 +12,9 @@ public class Main {
         ShelterManager manager = new ShelterManager();
 
         // 1. Tworzenie sektorów
-        manager.addSector("Psy", 3);
-        manager.addSector("Koty", 2);
-        manager.addSector("Kwarantanna", 2);
+        manager.addSector("Psy", 6);
+        manager.addSector("Koty", 7);
+        manager.addSector("Kwarantanna", 4);
 
         // 2. Tworzenie zwierząt
         Animal max = new Animal(
@@ -32,10 +32,16 @@ public class Main {
                 AnimalCondition.HEALTHY, 2, 4.2
         );
 
+        Animal rysia = new Animal(
+                "Rysia", "Kot", "Mieszaniec",
+                AnimalCondition.HEALTHY, 7, 15
+        );
+
         // 3. Dodawanie zwierząt
         manager.addAnimalToSector("Psy", max);
         manager.addAnimalToSector("Psy", azor);
         manager.addAnimalToSector("Koty", bella);
+        manager.addAnimalToSector("Koty", rysia);
 
         System.out.println("\n=== PODSUMOWANIE ===");
         manager.summary();
@@ -62,6 +68,9 @@ public class Main {
         // 7. Przenoszenie zwierzęcia
         manager.moveAnimalBetweenSectors(
                 azor.getId(), "Psy", "Kwarantanna"
+        );
+        manager.moveAnimalBetweenSectors(
+                rysia.getId(), "Koty", "Kwarantanna"
         );
 
         // 8. Liczenie zwierząt według stanu zdrowia
