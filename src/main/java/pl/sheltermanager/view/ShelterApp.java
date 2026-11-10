@@ -34,9 +34,20 @@ import java.io.IOException;
 import java.nio.file.Files;
 import javafx.stage.FileChooser;
 import java.io.File;
+import java.nio.file.StandardCopyOption;
+import pl.sheltermanager.service.AnimalQueryService;
 
 public class ShelterApp extends Application {
+
     private Runnable updateAnimalTable;
+    private Runnable updateStats;
+
+    private ShelterManager currentManager;
+    private ShelterFileRepository fileRepository;
+    private Path dataFilePath;
+    private final AnimalQueryService animalQueryService =
+            new AnimalQueryService();
+
     @Override
     public void start(Stage stage) {
 
@@ -44,6 +55,8 @@ public class ShelterApp extends Application {
                 new ShelterFileRepository();
 
         Path dataPath = Path.of("shelter-data.json");
+        this.fileRepository = repository;
+        this.dataFilePath = dataPath;
 
         ShelterManager manager;
 
@@ -86,12 +99,62 @@ public class ShelterApp extends Application {
             ));
         }
         final ShelterManager shelterManager = manager;
+        this.currentManager = shelterManager;
 
         Label title = new Label("🐾 ShelterManager");
         title.setStyle("-fx-font-size: 26px; -fx-font-weight: bold;");
 
+
         Label summary = new Label();
         updateSummary(manager, summary);
+
+        Label animalCount = new Label();
+        Label sectorCount = new Label();
+        Label freePlaces = new Label();
+
+        animalCount.getStyleClass().add("stat-number");
+        sectorCount.getStyleClass().add("stat-number");
+        freePlaces.getStyleClass().add("stat-number");
+
+        Runnable refreshStats = () -> {
+            int animals = 0;
+            int capacity = 0;
+
+            for (ShelterSector sector : manager.getAllSectors()) {
+                animals += sector.getAnimals().size();
+                capacity += sector.getMaxCapacity();
+            }
+
+            animalCount.setText(String.valueOf(animals));
+            sectorCount.setText(
+                    String.valueOf(manager.getAllSectors().size())
+            );
+            freePlaces.setText(String.valueOf(capacity - animals));
+        };
+
+        this.updateStats = refreshStats;
+        refreshStats.run();
+
+
+        VBox animalsCard = new VBox(
+                8, new Label("Zwierzęta"), animalCount
+        );
+
+        VBox sectorsCard = new VBox(
+                8, new Label("Sektory"), sectorCount
+        );
+
+        VBox placesCard = new VBox(
+                8, new Label("Wolne miejsca"), freePlaces
+        );
+
+        animalsCard.getStyleClass().add("stat-card");
+        sectorsCard.getStyleClass().add("stat-card");
+        placesCard.getStyleClass().add("stat-card");
+
+        HBox stats = new HBox(
+                10, animalsCard, sectorsCard, placesCard
+        );
 
         // Tabela sektorów
         TableView<ShelterSector> sectorTable = new TableView<>();
@@ -117,12 +180,31 @@ public class ShelterApp extends Application {
         });
 
         sectorTable.getColumns().addAll(sectorName, capacity);
+
+        sectorTable.setColumnResizePolicy(
+                TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN
+        );
+
+        sectorName.setPrefWidth(180);
+        capacity.setPrefWidth(160);
+
+        sectorTable.setPrefWidth(380);
+
         sectorTable.setItems(
                 FXCollections.observableArrayList(manager.getAllSectors())
         );
 
         // Tabela zwierząt
         TableView<Animal> animalTable = new TableView<>();
+        TableColumn<Animal, String> idColumn =
+                new TableColumn<>("ID");
+        animalTable.setTableMenuButtonVisible(true);
+
+        idColumn.setCellValueFactory(data ->
+                new ReadOnlyStringWrapper(
+                        data.getValue().getId()
+                )
+        );
 
         TableColumn<Animal, String> animalName =
                 new TableColumn<>("Imię");
@@ -160,17 +242,69 @@ public class ShelterApp extends Application {
                 )
         );
 
-        animalTable.getColumns().addAll(
-                animalName, species, age, weight
+        TableColumn<Animal, String> breedColumn =
+                new TableColumn<>("Rasa");
+
+        breedColumn.setCellValueFactory(data ->
+                new ReadOnlyStringWrapper(
+                        data.getValue().getBreed()
+                )
         );
+
+        TableColumn<Animal, String> conditionColumn =
+                new TableColumn<>("Stan zdrowia");
+
+        conditionColumn.setCellValueFactory(data ->
+                new ReadOnlyStringWrapper(
+                        data.getValue().getCondition().name()
+                )
+        );
+
+
+        animalTable.getColumns().addAll(
+                idColumn,
+                animalName,
+                species,
+                breedColumn,
+                age,
+                weight,
+                conditionColumn
+        );
+
+        idColumn.setPrefWidth(65);
+        animalName.setPrefWidth(100);
+        species.setPrefWidth(90);
+        breedColumn.setPrefWidth(120);
+        age.setPrefWidth(60);
+        weight.setPrefWidth(90);
+        conditionColumn.setPrefWidth(135);
 
         Button addSectorButton = new Button("+ Dodaj sektor");
 
         addSectorButton.setOnAction(event -> {
-            showAddSectorDialog(manager, sectorTable, summary);
+
+            SectorDialogs sectorDialogs = new SectorDialogs();
+
+            sectorDialogs.showAddSectorDialog(
+                    manager,
+                    () -> {
+                        saveData();
+
+                        sectorTable.setItems(
+                                FXCollections.observableArrayList(
+                                        manager.getAllSectors()
+                                )
+                        );
+
+                        sectorTable.getSelectionModel().selectLast();
+                        updateSummary(manager, summary);
+                    }
+            );
         });
 
+
         Button removeSectorButton = new Button("Usuń sektor");
+
 
         removeSectorButton.setOnAction(event -> {
 
@@ -182,15 +316,36 @@ public class ShelterApp extends Application {
                 return;
             }
 
-            showRemoveSectorDialog(
+            SectorDialogs sectorDialogs = new SectorDialogs();
+
+            sectorDialogs.showRemoveSectorDialog(
                     manager,
                     selectedSector,
-                    sectorTable,
-                    summary
+                    () -> {
+                        saveData();
+
+                        sectorTable.setItems(
+                                FXCollections.observableArrayList(
+                                        manager.getAllSectors()
+                                )
+                        );
+
+                        if (!sectorTable.getItems().isEmpty()) {
+                            sectorTable.getSelectionModel().selectFirst();
+                        } else {
+                            sectorTable.getSelectionModel().clearSelection();
+                        }
+
+                        updateAnimalTable.run();
+                        animalTable.refresh();
+                        updateSummary(manager, summary);
+                    }
             );
         });
 
+
         Button editSectorButton = new Button("Edytuj sektor");
+
 
         editSectorButton.setOnAction(event -> {
 
@@ -202,23 +357,35 @@ public class ShelterApp extends Application {
                 return;
             }
 
-            showEditSectorDialog(
+            SectorDialogs sectorDialogs = new SectorDialogs();
+
+            sectorDialogs.showEditSectorDialog(
                     manager,
                     selectedSector,
-                    sectorTable,
-                    summary
+                    () -> {
+                        saveData();
+
+                        sectorTable.refresh();
+                        animalTable.refresh();
+
+                        updateAnimalTable.run();
+                        updateSummary(manager, summary);
+                    }
             );
         });
 
-        HBox sectorButtons = new HBox(
+        VBox sectorButtons = new VBox(
                 10,
                 addSectorButton,
                 editSectorButton,
                 removeSectorButton
         );
+        addSectorButton.setMaxWidth(Double.MAX_VALUE);
+        editSectorButton.setMaxWidth(Double.MAX_VALUE);
+        removeSectorButton.setMaxWidth(Double.MAX_VALUE);
 
         VBox left = new VBox(
-                10,
+                12,
                 new Label("Sektory schroniska"),
                 sectorButtons,
                 sectorTable
@@ -227,6 +394,7 @@ public class ShelterApp extends Application {
         Button addAnimalButton = new Button("+ Dodaj zwierzę");
 
         addAnimalButton.setOnAction(event -> {
+
             ShelterSector selectedSector =
                     sectorTable.getSelectionModel().getSelectedItem();
 
@@ -235,9 +403,21 @@ public class ShelterApp extends Application {
                 return;
             }
 
-            showAddAnimalDialog(manager, selectedSector, animalTable,
-                    sectorTable, summary);
+            AnimalDialogs animalDialogs = new AnimalDialogs();
+
+            animalDialogs.showAddAnimalDialog(
+                    manager,
+                    selectedSector,
+                    () -> {
+                        saveData();
+                        updateAnimalTable.run();
+                        animalTable.refresh();
+                        sectorTable.refresh();
+                        updateSummary(manager, summary);
+                    }
+            );
         });
+
 
         Button editAnimalButton = new Button("Edytuj zwierzę");
         Button removeAnimalButton = new Button("Usuń zwierzę");
@@ -256,34 +436,46 @@ public class ShelterApp extends Application {
                 return;
             }
 
-            showMoveAnimalDialog(
+            AnimalDialogs animalDialogs = new AnimalDialogs();
+
+            animalDialogs.showMoveAnimalDialog(
                     manager,
                     selectedSector,
                     selectedAnimal,
-                    animalTable,
-                    sectorTable,
-                    summary
+                    () -> {
+                        saveData();
+                        updateAnimalTable.run();
+                        animalTable.refresh();
+                        sectorTable.refresh();
+                        updateSummary(manager, summary);
+                    }
             );
         });
 
-
         editAnimalButton.setOnAction(event -> {
-
-            ShelterSector selectedSector =
-                    sectorTable.getSelectionModel().getSelectedItem();
 
             Animal selectedAnimal =
                     animalTable.getSelectionModel().getSelectedItem();
 
-            if (selectedSector == null || selectedAnimal == null) {
+            if (selectedAnimal == null) {
                 showError("Najpierw wybierz zwierzę z tabeli.");
                 return;
             }
 
-            showEditAnimalDialog(
-                    selectedSector,
+            AnimalDialogs animalDialogs = new AnimalDialogs();
+
+
+            animalDialogs.showEditAnimalDialog(
                     selectedAnimal,
-                    animalTable
+                    () -> {
+                        saveData();
+
+                        updateAnimalTable.run();
+                        animalTable.refresh();
+                        sectorTable.refresh();
+
+                        updateSummary(manager, summary);
+                    }
             );
 
         });
@@ -301,15 +493,19 @@ public class ShelterApp extends Application {
                 return;
             }
 
-            removeSelectedAnimal(
-                    manager,
+            AnimalDialogs animalDialogs = new AnimalDialogs();
+
+            animalDialogs.showRemoveAnimalDialog(
                     selectedSector,
                     selectedAnimal,
-                    animalTable,
-                    sectorTable,
-                    summary
+                    () -> {
+                        saveData();
+                        updateAnimalTable.run();
+                        animalTable.refresh();
+                        sectorTable.refresh();
+                        updateSummary(manager, summary);
+                    }
             );
-
         });
 
         HBox buttons = new HBox(
@@ -412,8 +608,6 @@ public class ShelterApp extends Application {
                 animalTable
         );
 
-
-        HBox tables = new HBox(20, left, right);
         HBox.setHgrow(right, javafx.scene.layout.Priority.ALWAYS);
         animalTable.setColumnResizePolicy(
                 TableView.CONSTRAINED_RESIZE_POLICY
@@ -425,11 +619,50 @@ public class ShelterApp extends Application {
             exportShelterData(stage, manager, repository);
         });
 
-        VBox root = new VBox(20, title, summary, exportButton, tables);
-        root.setPadding(new Insets(25));
-        root.setStyle("-fx-background-color: #F5F7F5;");
+        Button importButton = new Button("Importuj JSON");
 
-        Scene scene = new Scene(root, 1000, 600);
+        importButton.setOnAction(event -> {
+            importShelterData(stage, repository, dataPath);
+        });
+
+        HBox fileButtons = new HBox(
+                10,
+                importButton,
+                exportButton
+        );
+
+        sectorTable.setPrefHeight(320);
+        VBox leftPanel = new VBox(
+                20,
+                stats,
+                fileButtons,
+                left
+        );
+
+        leftPanel.setPrefWidth(380);
+        leftPanel.setMinWidth(320);
+
+        HBox mainContent = new HBox(
+                30,
+                leftPanel,
+                right
+        );
+
+        HBox.setHgrow(right, javafx.scene.layout.Priority.ALWAYS);
+
+        VBox root = new VBox(
+                25,
+                title,
+                mainContent
+        );
+
+        root.setPadding(new Insets(25));
+
+        Scene scene = new Scene(root, 1250, 700);
+
+        scene.getStylesheets().add(
+                getClass().getResource("/style.css").toExternalForm()
+        );
 
         stage.setTitle("ShelterManager");
         stage.setScene(scene);
@@ -461,11 +694,7 @@ public class ShelterApp extends Application {
     }
 
     private void showError(String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("Błąd");
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+        DialogUtils.showError(message);
     }
 
     private void updateSummary(ShelterManager manager, Label summary) {
@@ -483,331 +712,11 @@ public class ShelterApp extends Application {
                         + " | Sektory: " + manager.getAllSectors().size()
                         + " | Wolne miejsca: " + (totalCapacity - totalAnimals)
         );
-    }
-
-
-    private void showAddAnimalDialog(
-            ShelterManager manager,
-            ShelterSector sector,
-            TableView<Animal> animalTable,
-            TableView<ShelterSector> sectorTable,
-            Label summary) {
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Dodaj zwierzę");
-        dialog.setHeaderText("Nowe zwierzę — " + sector.getSectorName());
-
-        ButtonType saveButton = new ButtonType(
-                "Zapisz", ButtonBar.ButtonData.OK_DONE
-        );
-
-        dialog.getDialogPane().getButtonTypes().addAll(
-                saveButton, ButtonType.CANCEL
-        );
-
-        TextField nameField = new TextField();
-        TextField speciesField = new TextField();
-        TextField breedField = new TextField();
-        TextField ageField = new TextField();
-        TextField weightField = new TextField();
-
-        ComboBox<AnimalCondition> conditionBox = new ComboBox<>();
-        conditionBox.getItems().addAll(AnimalCondition.values());
-        conditionBox.setValue(AnimalCondition.HEALTHY);
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20));
-
-        grid.addRow(0, new Label("Imię:"), nameField);
-        grid.addRow(1, new Label("Gatunek:"), speciesField);
-        grid.addRow(2, new Label("Rasa:"), breedField);
-        grid.addRow(3, new Label("Stan zdrowia:"), conditionBox);
-        grid.addRow(4, new Label("Wiek:"), ageField);
-        grid.addRow(5, new Label("Waga (kg):"), weightField);
-
-        dialog.getDialogPane().setContent(grid);
-
-        Optional<ButtonType> result = dialog.showAndWait();
-
-        if (result.isPresent() && result.get() == saveButton) {
-            try {
-                int age = Integer.parseInt(ageField.getText().trim());
-
-                double weight = Double.parseDouble(
-                        weightField.getText().trim().replace(",", ".")
-                );
-
-                Animal animal = new Animal(
-                        nameField.getText(),
-                        speciesField.getText(),
-                        breedField.getText(),
-                        conditionBox.getValue(),
-                        age,
-                        weight
-                );
-
-                manager.addAnimalToSector(
-                        sector.getSectorName(), animal
-                );
-
-                updateAnimalTable.run();
-
-                sectorTable.refresh();
-                updateSummary(manager, summary);
-
-                Alert success = new Alert(Alert.AlertType.INFORMATION);
-                success.setHeaderText(null);
-                success.setContentText(
-                        "Dodano zwierzę: " + animal.getName()
-                                + "\nID: " + animal.getId()
-                );
-                success.showAndWait();
-
-            } catch (NumberFormatException e) {
-                showError("Wiek musi być liczbą całkowitą, a waga liczbą.");
-            } catch (IllegalArgumentException | IllegalStateException e) {
-                showError(e.getMessage());
-            }
+//updatowanie kafelkow
+        if (updateStats != null) {
+            updateStats.run();
         }
     }
-
-    private void showEditAnimalDialog(
-            ShelterSector sector,
-            Animal animal,
-            TableView<Animal> animalTable) {
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Edytuj zwierzę");
-        dialog.setHeaderText(
-                "Edycja: " + animal.getName()
-                        + " (ID: " + animal.getId() + ")"
-        );
-
-        ButtonType saveButton = new ButtonType(
-                "Zapisz", ButtonBar.ButtonData.OK_DONE
-        );
-
-        dialog.getDialogPane().getButtonTypes().addAll(
-                saveButton, ButtonType.CANCEL
-        );
-
-        TextField nameField = new TextField(animal.getName());
-        TextField speciesField = new TextField(animal.getSpecies());
-        TextField breedField = new TextField(animal.getBreed());
-        TextField ageField = new TextField(
-                String.valueOf(animal.getAge())
-        );
-        TextField weightField = new TextField(
-                String.valueOf(animal.getWeight())
-        );
-
-        ComboBox<AnimalCondition> conditionBox = new ComboBox<>();
-        conditionBox.getItems().addAll(AnimalCondition.values());
-        conditionBox.setValue(animal.getCondition());
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20));
-
-        grid.addRow(0, new Label("Imię:"), nameField);
-        grid.addRow(1, new Label("Gatunek:"), speciesField);
-        grid.addRow(2, new Label("Rasa:"), breedField);
-        grid.addRow(3, new Label("Stan zdrowia:"), conditionBox);
-        grid.addRow(4, new Label("Wiek:"), ageField);
-        grid.addRow(5, new Label("Waga (kg):"), weightField);
-
-        dialog.getDialogPane().setContent(grid);
-
-        Optional<ButtonType> result = dialog.showAndWait();
-
-        if (result.isPresent() && result.get() == saveButton) {
-
-            try {
-                String name = nameField.getText().trim();
-                String species = speciesField.getText().trim();
-                String breed = breedField.getText().trim();
-
-                int age = Integer.parseInt(
-                        ageField.getText().trim()
-                );
-
-                double weight = Double.parseDouble(
-                        weightField.getText().trim().replace(",", ".")
-                );
-
-                // Najpierw sprawdzamy wszystkie nowe dane
-                Animal validated = new Animal(
-                        name,
-                        species,
-                        breed,
-                        conditionBox.getValue(),
-                        age,
-                        weight
-                );
-
-                // Aktualizujemy istniejące zwierzę
-                animal.setName(validated.getName());
-                animal.setSpecies(validated.getSpecies());
-                animal.setBreed(validated.getBreed());
-                animal.setCondition(validated.getCondition());
-                animal.setAge(validated.getAge());
-                animal.setWeight(validated.getWeight());
-
-                updateAnimalTable.run();
-
-                Alert success = new Alert(
-                        Alert.AlertType.INFORMATION
-                );
-                success.setHeaderText(null);
-                success.setContentText(
-                        "Zaktualizowano dane zwierzęcia."
-                );
-                success.showAndWait();
-
-            } catch (NumberFormatException e) {
-                showError("Wiek i waga muszą być liczbami.");
-            } catch (IllegalArgumentException e) {
-                showError(e.getMessage());
-            }
-        }
-    }
-
-    private void removeSelectedAnimal(
-            ShelterManager manager,
-            ShelterSector sector,
-            Animal animal,
-            TableView<Animal> animalTable,
-            TableView<ShelterSector> sectorTable,
-            Label summary) {
-
-        Alert confirmation = new Alert(
-                Alert.AlertType.CONFIRMATION
-        );
-
-        confirmation.setTitle("Usuń zwierzę");
-        confirmation.setHeaderText(
-                "Czy na pewno chcesz usunąć zwierzę?"
-        );
-        confirmation.setContentText(
-                animal.getName() + " (ID: " + animal.getId() + ")"
-        );
-
-        Optional<ButtonType> result = confirmation.showAndWait();
-
-        if (result.isPresent()
-                && result.get() == ButtonType.OK) {
-
-            try {
-                sector.removeAnimal(animal);
-
-                updateAnimalTable.run();
-
-                sectorTable.refresh();
-                updateSummary(manager, summary);
-
-                Alert success = new Alert(
-                        Alert.AlertType.INFORMATION
-                );
-                success.setHeaderText(null);
-                success.setContentText(
-                        "Zwierzę zostało usunięte."
-                );
-                success.showAndWait();
-
-            } catch (IllegalArgumentException e) {
-                showError(e.getMessage());
-            }
-        }
-    }
-
-    private void showMoveAnimalDialog(
-            ShelterManager manager,
-            ShelterSector sourceSector,
-            Animal animal,
-            TableView<Animal> animalTable,
-            TableView<ShelterSector> sectorTable,
-            Label summary) {
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-
-        dialog.setTitle("Przenieś zwierzę");
-        dialog.setHeaderText(
-                "Przenoszenie: " + animal.getName()
-                        + " (ID: " + animal.getId() + ")"
-        );
-
-        ButtonType moveButton = new ButtonType(
-                "Przenieś", ButtonBar.ButtonData.OK_DONE
-        );
-
-        dialog.getDialogPane().getButtonTypes().addAll(
-                moveButton, ButtonType.CANCEL
-        );
-
-        ComboBox<String> sectorBox = new ComboBox<>();
-
-        for (ShelterSector sector : manager.getAllSectors()) {
-            if (sector != sourceSector) {
-                sectorBox.getItems().add(sector.getSectorName());
-            }
-        }
-
-        sectorBox.setPromptText("Wybierz sektor docelowy");
-
-        VBox content = new VBox(
-                10,
-                new Label("Sektor źródłowy: "
-                        + sourceSector.getSectorName()),
-                new Label("Sektor docelowy:"),
-                sectorBox
-        );
-
-        content.setPadding(new Insets(20));
-        dialog.getDialogPane().setContent(content);
-
-        Optional<ButtonType> result = dialog.showAndWait();
-
-        if (result.isPresent() && result.get() == moveButton) {
-
-            if (sectorBox.getValue() == null) {
-                showError("Wybierz sektor docelowy.");
-                return;
-            }
-
-            try {
-                manager.moveAnimalBetweenSectors(
-                        animal.getId(),
-                        sourceSector.getSectorName(),
-                        sectorBox.getValue()
-                );
-
-                updateAnimalTable.run();
-
-                // Aktualizacja zapełnienia sektorów
-                sectorTable.refresh();
-                updateSummary(manager, summary);
-
-                Alert success = new Alert(
-                        Alert.AlertType.INFORMATION
-                );
-
-                success.setHeaderText(null);
-                success.setContentText(
-                        "Przeniesiono " + animal.getName()
-                                + " do sektora " + sectorBox.getValue()
-                );
-
-                success.showAndWait();
-
-            } catch (IllegalArgumentException | IllegalStateException e) {
-                showError(e.getMessage());
-            }
-        }
-    }
-
     private void refreshAnimalTable(
             ShelterSector sector,
             TableView<Animal> animalTable,
@@ -815,314 +724,16 @@ public class ShelterApp extends Application {
             AnimalCondition condition,
             String sortOption) {
 
-        if (sector == null) {
-            animalTable.getItems().clear();
-            return;
-        }
-
-        // Pobieramy zwierzęta z wybranego sektora
-        List<Animal> animals = new ArrayList<>(
-                sector.getAnimals()
+        List<Animal> animals = animalQueryService.getAnimals(
+                sector,
+                searchText,
+                condition,
+                sortOption
         );
-
-        // Wyszukiwanie
-        if (searchText != null && !searchText.isBlank()) {
-            animals = new ArrayList<>(
-                    sector.searchPartial(searchText)
-            );
-        }
-
-        // Filtrowanie według stanu zdrowia
-        if (condition != null) {
-            animals.removeIf(
-                    animal -> animal.getCondition() != condition
-            );
-        }
-
-        // Sortowanie
-        if (sortOption != null) {
-            switch (sortOption) {
-                case "Imię A-Z":
-                    animals.sort(
-                            Comparator.comparing(
-                                    Animal::getName,
-                                    String.CASE_INSENSITIVE_ORDER
-                            )
-                    );
-                    break;
-
-                case "Imię Z-A":
-                    animals.sort(
-                            Comparator.comparing(
-                                    Animal::getName,
-                                    String.CASE_INSENSITIVE_ORDER
-                            ).reversed()
-                    );
-                    break;
-
-                case "Wiek rosnąco":
-                    animals.sort(
-                            Comparator.comparingInt(Animal::getAge)
-                    );
-                    break;
-
-                case "Wiek malejąco":
-                    animals.sort(
-                            Comparator.comparingInt(
-                                    Animal::getAge
-                            ).reversed()
-                    );
-                    break;
-
-                case "Waga rosnąco":
-                    animals.sort(
-                            Comparator.comparingDouble(
-                                    Animal::getWeight
-                            )
-                    );
-                    break;
-
-                case "Waga malejąco":
-                    animals.sort(
-                            Comparator.comparingDouble(
-                                    Animal::getWeight
-                            ).reversed()
-                    );
-                    break;
-            }
-        }
 
         animalTable.setItems(
                 FXCollections.observableArrayList(animals)
         );
-    }
-
-    private void showAddSectorDialog(
-            ShelterManager manager,
-            TableView<ShelterSector> sectorTable,
-            Label summary) {
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Dodaj sektor");
-        dialog.setHeaderText("Tworzenie nowego sektora");
-
-        ButtonType saveButton = new ButtonType(
-                "Zapisz", ButtonBar.ButtonData.OK_DONE
-        );
-
-        dialog.getDialogPane().getButtonTypes().addAll(
-                saveButton, ButtonType.CANCEL
-        );
-
-        TextField nameField = new TextField();
-        nameField.setPromptText("Np. Sektor D");
-
-        TextField capacityField = new TextField();
-        capacityField.setPromptText("Np. 10");
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20));
-
-        grid.addRow(0, new Label("Nazwa sektora:"), nameField);
-        grid.addRow(1, new Label("Pojemność:"), capacityField);
-
-        dialog.getDialogPane().setContent(grid);
-
-        // Zapisywanie bez zamykania formularza przy błędnych danych
-        Button save = (Button) dialog.getDialogPane()
-                .lookupButton(saveButton);
-
-        save.addEventFilter(
-                javafx.event.ActionEvent.ACTION, event -> {
-                    try {
-                        String name = nameField.getText().trim();
-
-                        int capacity = Integer.parseInt(
-                                capacityField.getText().trim()
-                        );
-
-                        manager.addSector(name, capacity);
-
-                        sectorTable.setItems(
-                                FXCollections.observableArrayList(
-                                        manager.getAllSectors()
-                                )
-                        );
-
-                        updateSummary(manager, summary);
-
-                        Alert success = new Alert(
-                                Alert.AlertType.INFORMATION
-                        );
-                        success.setHeaderText(null);
-                        success.setContentText(
-                                "Dodano sektor: " + name
-                        );
-                        success.showAndWait();
-
-                    } catch (NumberFormatException e) {
-                        showError(
-                                "Pojemność musi być liczbą całkowitą."
-                        );
-                        event.consume();
-
-                    } catch (IllegalArgumentException e) {
-                        showError(e.getMessage());
-                        event.consume();
-                    }
-                }
-        );
-
-        dialog.showAndWait();
-    }
-
-    private void showRemoveSectorDialog(
-            ShelterManager manager,
-            ShelterSector sector,
-            TableView<ShelterSector> sectorTable,
-            Label summary) {
-
-        if (!sector.getAnimals().isEmpty()) {
-            showError(
-                    "Nie można usunąć sektora, w którym znajdują się zwierzęta."
-            );
-            return;
-        }
-
-        Alert confirmation = new Alert(
-                Alert.AlertType.CONFIRMATION
-        );
-
-        confirmation.setTitle("Usuń sektor");
-        confirmation.setHeaderText(
-                "Czy na pewno chcesz usunąć sektor?"
-        );
-        confirmation.setContentText(sector.getSectorName());
-
-        Optional<ButtonType> result = confirmation.showAndWait();
-
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-
-            try {
-                manager.removeSector(sector.getSectorName());
-
-                sectorTable.setItems(
-                        FXCollections.observableArrayList(
-                                manager.getAllSectors()
-                        )
-                );
-
-                updateSummary(manager, summary);
-
-                // Zaznaczamy kolejny dostępny sektor
-                if (!sectorTable.getItems().isEmpty()) {
-                    sectorTable.getSelectionModel().selectFirst();
-                } else {
-                    sectorTable.getSelectionModel().clearSelection();
-                    updateAnimalTable.run();
-                }
-                Alert success = new Alert(
-                        Alert.AlertType.INFORMATION
-                );
-                success.setHeaderText(null);
-                success.setContentText(
-                        "Sektor został usunięty."
-                );
-                success.showAndWait();
-
-            } catch (IllegalArgumentException | IllegalStateException e) {
-                showError(e.getMessage());
-            }
-        }
-    }
-
-    private void showEditSectorDialog(
-            ShelterManager manager,
-            ShelterSector sector,
-            TableView<ShelterSector> sectorTable,
-            Label summary) {
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Edytuj sektor");
-        dialog.setHeaderText(
-                "Edycja sektora: " + sector.getSectorName()
-        );
-
-        ButtonType saveButton = new ButtonType(
-                "Zapisz", ButtonBar.ButtonData.OK_DONE
-        );
-
-        dialog.getDialogPane().getButtonTypes().addAll(
-                saveButton, ButtonType.CANCEL
-        );
-
-        TextField nameField = new TextField(
-                sector.getSectorName()
-        );
-
-        TextField capacityField = new TextField(
-                String.valueOf(sector.getMaxCapacity())
-        );
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20));
-
-        grid.addRow(0, new Label("Nazwa sektora:"), nameField);
-        grid.addRow(1, new Label("Pojemność:"), capacityField);
-
-        dialog.getDialogPane().setContent(grid);
-
-        Button save = (Button) dialog.getDialogPane()
-                .lookupButton(saveButton);
-
-        save.addEventFilter(
-                javafx.event.ActionEvent.ACTION, event -> {
-
-                    try {
-                        String oldName = sector.getSectorName();
-                        String newName = nameField.getText().trim();
-
-                        int newCapacity = Integer.parseInt(
-                                capacityField.getText().trim()
-                        );
-
-                        manager.updateSector(
-                                oldName,
-                                newName,
-                                newCapacity
-                        );
-
-                        sectorTable.refresh();
-                        updateSummary(manager, summary);
-
-                        Alert success = new Alert(
-                                Alert.AlertType.INFORMATION
-                        );
-                        success.setHeaderText(null);
-                        success.setContentText(
-                                "Dane sektora zostały zaktualizowane."
-                        );
-                        success.showAndWait();
-
-                    } catch (NumberFormatException e) {
-                        showError(
-                                "Pojemność musi być liczbą całkowitą."
-                        );
-                        event.consume();
-
-                    } catch (IllegalArgumentException
-                             | IllegalStateException e) {
-                        showError(e.getMessage());
-                        event.consume();
-                    }
-                }
-        );
-
-        dialog.showAndWait();
     }
         private void exportShelterData(
                 Stage stage,
@@ -1168,4 +779,142 @@ public class ShelterApp extends Application {
                 );
             }
         }
+
+    private void importShelterData(
+            Stage stage,
+            ShelterFileRepository repository,
+            Path dataPath) {
+
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Importuj dane schroniska");
+
+        fileChooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter(
+                        "Pliki JSON (*.json)", "*.json"
+                )
+        );
+
+        File file = fileChooser.showOpenDialog(stage);
+
+        if (file == null) {
+            return;
+        }
+
+        // Najpierw sprawdzamy poprawność pliku
+        ShelterManager importedManager;
+
+        try {
+            importedManager = repository.loadFromFile(
+                    file.toPath()
+            );
+        } catch (IOException e) {
+            showError(
+                    "Nie udało się wczytać pliku:\n"
+                            + e.getMessage()
+            );
+            return;
+        }
+
+        // Potwierdzenie zastąpienia danych
+        Alert confirmation = new Alert(
+                Alert.AlertType.CONFIRMATION
+        );
+
+        confirmation.setTitle("Import danych");
+        confirmation.setHeaderText(
+                "Czy zastąpić aktualne dane schroniska?"
+        );
+        confirmation.setContentText(
+                "Przed importem zostanie utworzona kopia "
+                        + "dotychczasowego pliku JSON."
+        );
+
+        Optional<ButtonType> result =
+                confirmation.showAndWait();
+
+        if (result.isEmpty()
+                || result.get() != ButtonType.OK) {
+            return;
+        }
+
+        Path backupPath = Path.of("shelter-data-backup.json");
+        Path tempPath = Path.of("shelter-import-temp.json");
+
+        try {
+            // Kopia dotychczasowych danych
+            repository.saveToFile(
+                    getCurrentShelterManager(),
+                    tempPath
+            );
+
+            Files.copy(
+                    tempPath,
+                    backupPath,
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+
+            // Zapis nowych danych do pliku tymczasowego
+            repository.saveToFile(importedManager, tempPath);
+
+            // Zastąpienie głównego pliku
+            Files.move(
+                    tempPath,
+                    dataPath,
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+
+            // Ponowne zbudowanie interfejsu
+            start(stage);
+
+            Alert success = new Alert(
+                    Alert.AlertType.INFORMATION
+            );
+            success.setTitle("Import zakończony");
+            success.setHeaderText(null);
+            success.setContentText(
+                    "Dane schroniska zostały zaimportowane."
+            );
+            success.showAndWait();
+
+        } catch (IOException e) {
+            showError(
+                    "Błąd importowania danych:\n"
+                            + e.getMessage()
+            );
+        }
     }
+    private ShelterManager getCurrentShelterManager() {
+        return currentManager;
+    }
+
+    private boolean saveData() {
+
+        if (currentManager == null
+                || fileRepository == null
+                || dataFilePath == null) {
+            showError("Nie zainicjalizowano zapisu danych.");
+            return false;
+        }
+
+        try {
+            fileRepository.saveToFile(
+                    currentManager,
+                    dataFilePath
+            );
+
+            System.out.println(
+                    "Automatycznie zapisano dane schroniska."
+            );
+
+            return true;
+
+        } catch (IOException e) {
+            showError(
+                    "Nie udało się zapisać danych:\n"
+                            + e.getMessage()
+            );
+            return false;
+        }
+    }
+
+}

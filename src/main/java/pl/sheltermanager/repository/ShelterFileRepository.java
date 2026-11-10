@@ -2,16 +2,20 @@ package pl.sheltermanager.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+
 import pl.sheltermanager.dto.AnimalData;
 import pl.sheltermanager.dto.SectorData;
 import pl.sheltermanager.dto.ShelterData;
 import pl.sheltermanager.model.Animal;
+import pl.sheltermanager.model.AnimalCondition;
 import pl.sheltermanager.model.ShelterSector;
 import pl.sheltermanager.service.ShelterManager;
-import pl.sheltermanager.model.AnimalCondition;
-import java.nio.file.Files;
+
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 public class ShelterFileRepository {
 
@@ -52,7 +56,46 @@ public class ShelterFileRepository {
             shelterData.sectors.add(sectorData);
         }
 
-        mapper.writeValue(filePath.toFile(), shelterData);
+
+        Path target = filePath.toAbsolutePath();
+        Path directory = target.getParent();
+
+        Files.createDirectories(directory);
+
+// Tworzymy plik tymczasowy w tym samym folderze
+        Path tempFile = Files.createTempFile(
+                directory,
+                "shelter-",
+                ".tmp"
+        );
+
+        try {
+            // Najpierw zapisujemy kompletny JSON do pliku tymczasowego
+            mapper.writeValue(tempFile.toFile(), shelterData);
+
+            // Dopiero po poprawnym zapisie zastępujemy plik główny
+            try {
+                Files.move(
+                        tempFile,
+                        target,
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE
+                );
+
+            } catch (AtomicMoveNotSupportedException e) {
+                // Nie każdy system plików obsługuje atomową podmianę
+                Files.move(
+                        tempFile,
+                        target,
+                        StandardCopyOption.REPLACE_EXISTING
+                );
+            }
+
+        } finally {
+            // Sprzątamy pozostały plik tymczasowy
+            Files.deleteIfExists(tempFile);
+        }
+
     }
 
     public ShelterManager loadFromFile(Path filePath)

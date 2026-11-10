@@ -2,7 +2,15 @@
   "sectors" : [ {
     "name" : "Kwarantanna",
     "capacity" : 2,
-    "animals" : [ ]
+    "animals" : [ {
+      "id" : "A007",
+      "name" : "Bary",
+      "species" : "Pies",
+      "breed" : "Owczarek",
+      "condition" : "QUARANTINE",
+      "age" : 8,
+      "weight" : 45.0
+    } ]
   }, {
     "name" : "Psy",
     "capacity" : 5,
@@ -22,6 +30,14 @@
       "condition" : "SICK",
       "age" : 5,
       "weight" : 30.0
+    }, {
+      "id" : "A004",
+      "name" : "Luna",
+      "species" : "Pies",
+      "breed" : "Golden",
+      "condition" : "HEALTHY",
+      "age" : 2,
+      "weight" : 12.0
     } ]
   }, {
     "name" : "Koty",
@@ -34,6 +50,26 @@
       "condition" : "HEALTHY",
       "age" : 2,
       "weight" : 4.2
+    }, {
+      "id" : "A005",
+      "name" : "Lala",
+      "species" : "Kot",
+      "breed" : "Brytyjski",
+      "condition" : "HEALTHY",
+      "age" : 2,
+      "weight" : 5.0
+    }, {
+      "id" : "A006",
+      "name" : "Rysia",
+      "species" : "Kot",
+      "breed" : "Bengalski",
+      "condition" : "HEALTHY",
+      "age" : 7,
+      "weight" : 12.0
     } ]
+  }, {
+    "name" : "Psy Małe",
+    "capacity" : 8,
+    "animals" : [ ]
   } ]
 }
