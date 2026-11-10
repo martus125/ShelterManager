@@ -16,4 +16,7 @@ Thumbs.db
 # Lokalnie zapisane dane aplikacji
 data/
 
+# Lokalne dane schroniska
 shelter-data.json
+shelter-data-backup.json
+shelter-import-temp.json
