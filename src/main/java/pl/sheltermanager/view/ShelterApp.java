@@ -36,6 +36,7 @@ import javafx.stage.FileChooser;
 import java.io.File;
 import java.nio.file.StandardCopyOption;
 import pl.sheltermanager.service.AnimalQueryService;
+import javafx.scene.control.ScrollPane;
 
 public class ShelterApp extends Application {
 
@@ -641,12 +642,20 @@ public class ShelterApp extends Application {
 
         leftPanel.setPrefWidth(380);
         leftPanel.setMinWidth(320);
-
+//pozwalam zmieniac uklad przy zmniejszaniu okna
         HBox mainContent = new HBox(
                 30,
                 leftPanel,
                 right
         );
+        leftPanel.setMaxWidth(500);
+
+        mainContent.setAlignment(
+                javafx.geometry.Pos.TOP_LEFT
+        );
+
+        mainContent.setFillHeight(false);
+
 
         HBox.setHgrow(right, javafx.scene.layout.Priority.ALWAYS);
 
@@ -655,10 +664,62 @@ public class ShelterApp extends Application {
                 title,
                 mainContent
         );
+        right.setMinWidth(650);
 
+        root.widthProperty().addListener(
+                (obs, oldWidth, newWidth) -> {
+
+                    if (newWidth.doubleValue() < 1100) {
+
+                        if (!(root.getChildren().get(1)
+                                instanceof VBox)) {
+
+                            VBox verticalContent = new VBox(
+                                    25,
+                                    leftPanel,
+                                    right
+                            );
+
+                            verticalContent.setFillWidth(true);
+
+                            root.getChildren().set(
+                                    1,
+                                    verticalContent
+                            );
+                        }
+
+                    } else {
+
+                        if (!(root.getChildren().get(1)
+                                instanceof HBox)) {
+
+                            mainContent.getChildren().setAll(
+                                    leftPanel,
+                                    right
+                            );
+
+                            root.getChildren().set(
+                                    1,
+                                    mainContent
+                            );
+                        }
+                    }
+                }
+        );
+
+//responsywnosc aplikacji
         root.setPadding(new Insets(25));
+        ScrollPane scrollPane = new ScrollPane(root);
 
-        Scene scene = new Scene(root, 1250, 700);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setHbarPolicy(
+                ScrollPane.ScrollBarPolicy.NEVER
+        );
+        scrollPane.setVbarPolicy(
+                ScrollPane.ScrollBarPolicy.AS_NEEDED
+        );
+
+        Scene scene = new Scene(scrollPane, 1250, 700);
 
         scene.getStylesheets().add(
                 getClass().getResource("/style.css").toExternalForm()

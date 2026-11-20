@@ -1,8 +1,9 @@
+
 # IntelliJ IDEA
 .idea/
 *.iml
 
-# Maven
+# Maven - pliki wygenerowane podczas kompilacji i testów
 target/
 
 # Java
@@ -13,10 +14,21 @@ target/
 .DS_Store
 Thumbs.db
 
-# Lokalnie zapisane dane aplikacji
+# Lokalne dane aplikacji
 data/
 
-# Lokalne dane schroniska
+# Dane schroniska
 shelter-data.json
 shelter-data-backup.json
 shelter-import-temp.json
+
+# Pliki wygenerowane podczas importu, eksportu i testów
+shelter-export*.json
+bledny-test.json
+
+# Tymczasowe pliki i kopie zapasowe
+*.tmp
+*.bak
+
+# Pliki JaCoCo poza katalogiem target
+jacoco.exec
